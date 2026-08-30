@@ -53,7 +53,7 @@ def test_add_order_raises_error_if_exists(order_tracker, mock_storage):
 
 
 def test_add_order_stores_all_fields_with_default_status(order_tracker, mock_storage):
-    """The saved payload must contain every field, defaulting status to 'pending'."""
+    """The saved order has every field and the status defaults to pending."""
     order_tracker.add_order("ORD002", "Keyboard", 3, "CUST002")
 
     mock_storage.save_order.assert_called_once_with(
@@ -69,7 +69,7 @@ def test_add_order_stores_all_fields_with_default_status(order_tracker, mock_sto
 
 
 def test_add_order_returns_the_created_order(order_tracker):
-    """add_order returns the created order so the API layer can serialise it."""
+    """add_order returns the new order so app.py can send it back as JSON."""
     created = order_tracker.add_order("ORD003", "Mouse", 2, "CUST003")
 
     assert created == {
@@ -82,7 +82,7 @@ def test_add_order_returns_the_created_order(order_tracker):
 
 
 def test_add_order_accepts_explicit_status(order_tracker, mock_storage):
-    """An explicit, valid status overrides the 'pending' default."""
+    """Passing a status uses that instead of the pending default."""
     created = order_tracker.add_order("ORD004", "Monitor", 1, "CUST004", status="shipped")
 
     assert created["status"] == "shipped"
@@ -91,7 +91,7 @@ def test_add_order_accepts_explicit_status(order_tracker, mock_storage):
 
 @pytest.mark.parametrize("bad_quantity", [0, -1, 1.5, "2", None])
 def test_add_order_rejects_invalid_quantity(order_tracker, mock_storage, bad_quantity):
-    """Quantity must be a positive integer; nothing may be written to storage."""
+    """Quantity must be a positive whole number, and nothing is saved."""
     with pytest.raises(ValueError, match="Quantity must be a positive integer."):
         order_tracker.add_order("ORD005", "Cable", bad_quantity, "CUST005")
 
@@ -110,7 +110,7 @@ def test_add_order_rejects_invalid_quantity(order_tracker, mock_storage, bad_qua
 def test_add_order_rejects_missing_required_fields(
     order_tracker, mock_storage, order_id, item_name, customer_id, expected_message
 ):
-    """Empty or whitespace-only required fields are rejected."""
+    """Required fields that are empty or only spaces are rejected."""
     with pytest.raises(ValueError, match=expected_message):
         order_tracker.add_order(order_id, item_name, 1, customer_id)
 
@@ -118,7 +118,7 @@ def test_add_order_rejects_missing_required_fields(
 
 
 def test_add_order_rejects_invalid_initial_status(order_tracker, mock_storage):
-    """A status outside the allowed set is rejected before anything is saved."""
+    """A status we do not allow is rejected and nothing is saved."""
     with pytest.raises(ValueError, match="Invalid status 'teleported'"):
         order_tracker.add_order("ORD007", "Desk", 1, "CUST007", status="teleported")
 
@@ -131,7 +131,7 @@ def test_add_order_rejects_invalid_initial_status(order_tracker, mock_storage):
 
 
 def test_get_order_by_id_returns_existing_order(order_tracker, mock_storage):
-    """An existing ID returns the stored order dict."""
+    """An existing ID returns the stored order."""
     stored_order = {
         "order_id": "ORD010", "item_name": "Laptop", "quantity": 1,
         "customer_id": "CUST010", "status": "pending",
@@ -143,7 +143,7 @@ def test_get_order_by_id_returns_existing_order(order_tracker, mock_storage):
 
 
 def test_get_order_by_id_returns_none_when_missing(order_tracker, mock_storage):
-    """A missing order is 'not an error' - it simply returns None."""
+    """A missing order is not an error. It just returns None."""
     mock_storage.get_order.return_value = None
 
     assert order_tracker.get_order_by_id("NOPE") is None
@@ -151,7 +151,7 @@ def test_get_order_by_id_returns_none_when_missing(order_tracker, mock_storage):
 
 @pytest.mark.parametrize("bad_id", ["", "   ", None, 42])
 def test_get_order_by_id_rejects_invalid_id(order_tracker, mock_storage, bad_id):
-    """An unusable ID is a programming error, so it raises instead of returning None."""
+    """An empty or non text ID raises an error instead of returning None."""
     with pytest.raises(ValueError, match="Order ID must be a non-empty string."):
         order_tracker.get_order_by_id(bad_id)
 
@@ -164,7 +164,7 @@ def test_get_order_by_id_rejects_invalid_id(order_tracker, mock_storage, bad_id)
 
 
 def test_update_order_status_successfully(order_tracker, mock_storage):
-    """The happy path: pending -> shipped, saved back to storage and returned."""
+    """Changing pending to shipped saves the order and returns it."""
     mock_storage.get_order.return_value = {
         "order_id": "ORD020", "item_name": "Laptop", "quantity": 1,
         "customer_id": "CUST020", "status": "pending",
@@ -183,7 +183,7 @@ def test_update_order_status_successfully(order_tracker, mock_storage):
 
 
 def test_update_order_status_does_not_mutate_stored_dict(order_tracker, mock_storage):
-    """We copy-update-save, so the dict storage handed us is left untouched."""
+    """The dict we got back from storage is not changed."""
     original = {
         "order_id": "ORD021", "item_name": "Laptop", "quantity": 1,
         "customer_id": "CUST021", "status": "pending",
@@ -198,7 +198,7 @@ def test_update_order_status_does_not_mutate_stored_dict(order_tracker, mock_sto
 def test_update_order_status_rejects_invalid_status_without_reading_storage(
     order_tracker, mock_storage
 ):
-    """Fail fast: an invalid status is rejected before any storage lookup."""
+    """An invalid status is rejected before storage is read at all."""
     with pytest.raises(ValueError, match="Invalid status 'lost_in_space'"):
         order_tracker.update_order_status("ORD022", "lost_in_space")
 
@@ -207,7 +207,7 @@ def test_update_order_status_rejects_invalid_status_without_reading_storage(
 
 
 def test_update_order_status_raises_when_order_missing(order_tracker, mock_storage):
-    """Updating an order that does not exist is an error, not a silent no-op."""
+    """Updating an order that does not exist raises an error."""
     mock_storage.get_order.return_value = None
 
     with pytest.raises(ValueError, match="Order with ID 'GHOST' not found."):
@@ -218,7 +218,7 @@ def test_update_order_status_raises_when_order_missing(order_tracker, mock_stora
 
 @pytest.mark.parametrize("bad_id", ["", "   ", None])
 def test_update_order_status_rejects_invalid_id(order_tracker, mock_storage, bad_id):
-    """An empty order ID raises before anything else happens."""
+    """An empty order ID raises an error."""
     with pytest.raises(ValueError, match="Order ID must be a non-empty string."):
         order_tracker.update_order_status(bad_id, "shipped")
 
@@ -231,14 +231,14 @@ def test_update_order_status_rejects_invalid_id(order_tracker, mock_storage, bad
 
 
 def test_list_all_orders_returns_empty_list_when_storage_empty(order_tracker, mock_storage):
-    """Empty storage yields an empty list, not None."""
+    """Empty storage gives back an empty list."""
     mock_storage.get_all_orders.return_value = {}
 
     assert order_tracker.list_all_orders() == []
 
 
 def test_list_all_orders_returns_every_order(order_tracker, mock_storage):
-    """All stored orders are returned as a list of dicts (order is irrelevant)."""
+    """All stored orders come back in a list. The order does not matter."""
     order_a = {"order_id": "A", "item_name": "A", "quantity": 1,
                "customer_id": "C1", "status": "pending"}
     order_b = {"order_id": "B", "item_name": "B", "quantity": 2,
@@ -258,7 +258,7 @@ def test_list_all_orders_returns_every_order(order_tracker, mock_storage):
 
 
 def test_list_orders_by_status_returns_only_matching_orders(order_tracker, mock_storage):
-    """Only the orders whose status matches are returned."""
+    """Only the orders with a matching status are returned."""
     pending = {"order_id": "A", "item_name": "A", "quantity": 1,
                "customer_id": "C1", "status": "pending"}
     shipped = {"order_id": "B", "item_name": "B", "quantity": 2,
@@ -269,7 +269,7 @@ def test_list_orders_by_status_returns_only_matching_orders(order_tracker, mock_
 
 
 def test_list_orders_by_status_returns_empty_list_when_nothing_matches(order_tracker, mock_storage):
-    """A valid status with no matches returns an empty list, not an error."""
+    """A valid status with no matches returns an empty list."""
     pending = {"order_id": "A", "item_name": "A", "quantity": 1,
                "customer_id": "C1", "status": "pending"}
     mock_storage.get_all_orders.return_value = {"A": pending}
@@ -278,7 +278,7 @@ def test_list_orders_by_status_returns_empty_list_when_nothing_matches(order_tra
 
 
 def test_list_orders_by_status_returns_empty_list_when_storage_empty(order_tracker, mock_storage):
-    """Empty storage yields an empty list."""
+    """Empty storage gives back an empty list."""
     mock_storage.get_all_orders.return_value = {}
 
     assert order_tracker.list_orders_by_status("pending") == []
@@ -286,7 +286,7 @@ def test_list_orders_by_status_returns_empty_list_when_storage_empty(order_track
 
 @pytest.mark.parametrize("bad_status", ["", "   ", "banana"])
 def test_list_orders_by_status_rejects_invalid_status(order_tracker, mock_storage, bad_status):
-    """An empty or unknown status is a caller error and raises."""
+    """An empty or unknown status raises an error."""
     with pytest.raises(ValueError):
         order_tracker.list_orders_by_status(bad_status)
 

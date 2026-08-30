@@ -1,68 +1,71 @@
-# UdaTracker — Order Tracking Service (TDD)
+# UdaTracker
 
-A minimal order-tracking service built test-first with **pytest** and **Flask**, following the
-Red → Green → Refactor cycle. Business logic lives in a framework-agnostic `OrderTracker` class;
-a thin Flask layer exposes it as a REST API that the provided frontend consumes.
+An order tracking service built with Flask and pytest, using a test first
+approach. The business rules live in a plain Python class called
+`OrderTracker`, which does not import Flask. A small Flask layer sits on top
+and exposes those rules as a REST API, which the frontend then calls.
 
-Udacity project starter: [udacity/cd14599-project-starter](https://github.com/udacity/cd14599-project-starter)
+Starter code: [udacity/cd14599-project-starter](https://github.com/udacity/cd14599-project-starter)
 
 ## Layout
 
 ```
 .
-└── starter/                        # ← project root: run all commands from here
+└── starter/                        run all commands from here
     ├── pytest.ini
-    ├── README.md                   # reflection + API reference
+    ├── README.md                   reflection and API notes
     ├── backend/
-    │   ├── app.py                  # Flask routes (HTTP layer)
-    │   ├── order_tracker.py        # business logic (no Flask)
-    │   ├── in_memory_storage.py    # dict-backed store
+    │   ├── app.py                  Flask routes
+    │   ├── order_tracker.py        business rules, no Flask
+    │   ├── in_memory_storage.py    storage backed by a dictionary
     │   ├── requirements.txt
     │   └── tests/
-    │       ├── test_order_tracker.py   # unit tests (mocked storage)
-    │       └── test_api.py             # integration tests (Flask test client)
-    └── frontend/                   # provided UI — index.html, css/, js/
+    │       ├── test_order_tracker.py   unit tests using a mock store
+    │       └── test_api.py             integration tests using Flask's test client
+    └── frontend/                   provided web page
 ```
 
 ## Setup
 
 ```bash
 python3 -m venv venv
-source venv/bin/activate            # Windows: .\venv\Scripts\Activate.ps1
+source venv/bin/activate            # on Windows: .\venv\Scripts\Activate.ps1
 pip install -r starter/backend/requirements.txt
 ```
 
-## Run the tests
+## Running the tests
 
-Always from the `starter/` directory — `pytest.ini` sets `pythonpath = .` there, which is what
-makes `from backend.app import app` resolve.
+Run them from the `starter/` folder. The `pytest.ini` file there sets
+`pythonpath = .`, which is what lets `from backend.app import app` work.
 
 ```bash
 cd starter
 pytest
 ```
 
-## Run the app
+## Running the app
 
 ```bash
 cd starter
 python -m backend.app
 ```
 
-Then open <http://127.0.0.1:5000/>. Data is in-memory only and resets on restart.
+Then open http://127.0.0.1:5000/ in a browser. Orders are only held in memory,
+so they are cleared when the server restarts.
 
 ## API
 
+The allowed statuses are `pending`, `processing`, `shipped`, `delivered` and
+`cancelled`.
+
 | Endpoint | Method | Body | Success | Errors |
 | --- | --- | --- | --- | --- |
-| `/api/orders` | POST | `{order_id, item_name, quantity, customer_id, status?}` | `201` + order | `400` invalid, `409` duplicate ID |
-| `/api/orders/<order_id>` | GET | – | `200` + order | `404` not found |
-| `/api/orders/<order_id>/status` | PUT | `{new_status}` | `200` + updated order | `400` invalid status, `404` not found |
-| `/api/orders` | GET | – | `200` + list of orders | – |
-| `/api/orders?status=<status>` | GET | – | `200` + filtered list | `400` empty/invalid status |
-
-Valid statuses: `pending`, `processing`, `shipped`, `delivered`, `cancelled`.
+| `/api/orders` | POST | `{order_id, item_name, quantity, customer_id, status}` (status optional) | `201` and the order | `400` bad input, `409` ID already used |
+| `/api/orders/<order_id>` | GET | none | `200` and the order | `404` no such order |
+| `/api/orders/<order_id>/status` | PUT | `{new_status}` | `200` and the updated order | `400` bad status, `404` no such order |
+| `/api/orders` | GET | none | `200` and a list of all orders | none |
+| `/api/orders?status=<status>` | GET | none | `200` and a filtered list | `400` empty or unknown status |
 
 ## License
 
-See [LICENSE.txt](LICENSE.txt). Starter code © Udacity.
+See [LICENSE.txt](LICENSE.txt). Starter code belongs to Udacity.

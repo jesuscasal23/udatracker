@@ -3,20 +3,20 @@
 
 
 class OrderError(ValueError):
-    """Base class for order-related errors. Subclasses ValueError so that
-    existing tests written against ValueError continue to pass."""
+    """Base class for order errors. It inherits from ValueError so that tests
+    written against ValueError still pass."""
 
 
 class ValidationError(OrderError):
-    """Raised when the caller supplies invalid data (bad field, bad status)."""
+    """Raised when the data passed in is invalid, such as a bad field or status."""
 
 
 class DuplicateOrderError(OrderError):
-    """Raised when creating an order whose ID is already in use."""
+    """Raised when an order ID is already taken."""
 
 
 class OrderNotFoundError(OrderError):
-    """Raised when an operation targets an order that does not exist."""
+    """Raised when the order we are looking for does not exist."""
 
 
 class OrderTracker:
@@ -25,8 +25,8 @@ class OrderTracker:
     and retrieve order information.
     """
 
-    # The single source of truth for what a status may be. Defined once,
-    # on the class, so validation and error messages can never drift apart.
+    # Every status the app allows, listed once so the checks and the error
+    # messages always agree.
     VALID_STATUSES = ("pending", "processing", "shipped", "delivered", "cancelled")
 
     def __init__(self, storage):
@@ -36,18 +36,18 @@ class OrderTracker:
                 raise TypeError(f"Storage object must implement a callable '{method}' method.")
         self.storage = storage
 
-    # --- Internal validation helpers -------------------------------------
+    # --- Validation helpers ---
 
     @staticmethod
     def _require_non_empty_string(value, field_label):
-        """Guard for the string fields. Returns the trimmed value."""
+        """Check a text field is filled in and return it without extra spaces."""
         if not isinstance(value, str) or not value.strip():
             raise ValidationError(f"{field_label} must be a non-empty string.")
         return value.strip()
 
     @classmethod
     def _require_valid_status(cls, status):
-        """Guard for status values. Returns the validated status."""
+        """Check the status is one we allow and return it."""
         cls._require_non_empty_string(status, "Status")
         if status not in cls.VALID_STATUSES:
             raise ValidationError(
@@ -56,27 +56,27 @@ class OrderTracker:
             )
         return status
 
-    # --- Public API -------------------------------------------------------
+    # --- Public methods ---
 
     def add_order(self, order_id: str, item_name: str, quantity: int,
                   customer_id: str, status: str = "pending"):
-        """Create a new order and persist it. Returns the stored order dict."""
-        # --- 1. Validate the caller's data before anything else happens ---
+        """Create a new order, save it, and return it."""
+        # Check the input first, before we go near storage.
         order_id = self._require_non_empty_string(order_id, "Order ID")
         item_name = self._require_non_empty_string(item_name, "Item name")
         customer_id = self._require_non_empty_string(customer_id, "Customer ID")
 
-        # bool is a subclass of int in Python, so True would otherwise pass as 1.
+        # In Python a bool is also an int, so True would otherwise count as 1.
         if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:
             raise ValidationError("Quantity must be a positive integer.")
 
         status = self._require_valid_status(status)
 
-        # --- 2. Only now touch storage, to enforce uniqueness ---
+        # Now make sure the ID is not already taken.
         if self.storage.get_order(order_id) is not None:
             raise DuplicateOrderError(f"Order with ID '{order_id}' already exists.")
 
-        # --- 3. Build, save, and hand the record back to the caller ---
+        # Build the record, save it, and return it.
         order = {
             "order_id": order_id,
             "item_name": item_name,
@@ -88,32 +88,32 @@ class OrderTracker:
         return order
 
     def get_order_by_id(self, order_id: str):
-        """Return the order dict for `order_id`, or None if it does not exist."""
+        """Return the order with this ID, or None if there is no such order."""
         order_id = self._require_non_empty_string(order_id, "Order ID")
         return self.storage.get_order(order_id)
 
     def update_order_status(self, order_id: str, new_status: str):
-        """Change an order's status. Returns the updated order dict."""
+        """Change the status of an order and return the updated order."""
         order_id = self._require_non_empty_string(order_id, "Order ID")
-        # Validate the status before touching storage: fail fast on bad input.
+        # Check the status before reading storage, so bad input stops here.
         new_status = self._require_valid_status(new_status)
 
         existing_order = self.storage.get_order(order_id)
         if existing_order is None:
             raise OrderNotFoundError(f"Order with ID '{order_id}' not found.")
 
-        # Copy-update-save rather than mutating the dict storage handed us.
+        # Work on a copy so we do not change the dict that storage gave us.
         updated_order = dict(existing_order)
         updated_order["status"] = new_status
         self.storage.save_order(order_id, updated_order)
         return updated_order
 
     def list_all_orders(self):
-        """Return every order as a list of dicts."""
+        """Return all orders as a list."""
         return list(self.storage.get_all_orders().values())
 
     def list_orders_by_status(self, status: str):
-        """Return only the orders whose status matches `status`."""
+        """Return only the orders that have this status."""
         status = self._require_valid_status(status)
         return [
             order

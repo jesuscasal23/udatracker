@@ -12,8 +12,9 @@ in_memory_storage = InMemoryStorage()
 order_tracker = OrderTracker(in_memory_storage)
 
 
-# --- Centralised error handling --------------------------------------------
-# One place that decides how a business-logic failure becomes an HTTP response.
+# --- Error handling ---
+# These turn the errors raised by OrderTracker into JSON responses, so every
+# failure comes back in the same shape.
 
 
 @app.errorhandler(ValidationError)
@@ -31,7 +32,7 @@ def handle_order_not_found_error(error):
     return jsonify({"error": str(error)}), 404
 
 
-# --- Frontend --------------------------------------------------------------
+# --- Frontend ---
 
 
 @app.route('/')
@@ -43,7 +44,7 @@ def serve_index():
 def serve_static(filename):
     return send_from_directory(app.static_folder, filename)
 
-# --- API -------------------------------------------------------------------
+# --- API ---
 
 
 @app.route('/api/orders', methods=['POST'])
@@ -70,8 +71,7 @@ def get_order_api(order_id):
     return jsonify(order), 200
 
 
-# The provided integration test calls '/status'; the rubric names the bare
-# resource path. Both are served by this one view function.
+# The status can be updated at either path, so both are handled here.
 @app.route('/api/orders/<string:order_id>/status', methods=['PUT'])
 @app.route('/api/orders/<string:order_id>', methods=['PUT'])
 def update_order_status_api(order_id):
