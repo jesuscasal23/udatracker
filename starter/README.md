@@ -15,31 +15,22 @@ python -m backend.app     # http://127.0.0.1:5000/
 
 ## Reflection
 
-- **Design trade-off.** I started with a single `ValueError` for every failure, but the API
-  layer then had to inspect error message text to choose between 400, 404 and 409 — a
-  mapping that would silently break the first time anyone reworded a message. I refactored
-  to a small exception hierarchy (`ValidationError`, `DuplicateOrderError`,
-  `OrderNotFoundError`) all subclassing `ValueError`, so Flask `@app.errorhandler`s map
-  type → status code in one place. Subclassing `ValueError` was the key detail: all 36
-  existing tests kept passing untouched, which is what made the refactor safe to do.
+- **Design trade-off.** I first raised a plain `ValueError` for every failure, which forced the
+  API layer to match on message text to choose between 400, 404 and 409 — a mapping that breaks
+  silently the moment anyone rewords a message. I refactored to `ValidationError`,
+  `DuplicateOrderError` and `OrderNotFoundError`, all subclassing `ValueError` so my existing
+  tests kept passing, and mapped type to status code in three `@app.errorhandler`s.
 
-- **Testing insight.** The most useful assertion I wrote was `assert_not_called()`. It
-  caught that `update_order_status` was reading from storage *before* validating the new
-  status. Both orderings return an identical error, so no output-based test could have
-  seen the difference — only a mock recording the collaboration could. That reframed
-  mocks for me: they aren't just stand-ins for slow dependencies, they let you assert on
-  *how* a unit talks to its neighbours.
+- **Testing insight.** `assert_not_called()` caught `update_order_status` reading from storage
+  *before* validating the new status. Both orderings return an identical error, so no
+  output-based test could have seen it — only a mock recording the collaboration.
 
-- **Where the tests caught me out.** Two tests passed the moment I wrote them, against
-  stub methods that still said `pass` — `get_order_by_id` "returns None when missing" and
-  `update_order_status` "does not mutate the stored dict" are both vacuously true of a
-  no-op. Good evidence for why you run the test and watch it fail *before* implementing:
-  a test that has never been red hasn't proved anything.
+- **A test that lied.** Two of my tests passed against methods that still said `pass`; "returns
+  None when missing" is vacuously true of a no-op. Good reason to watch a test fail first.
 
-- **Next step.** Add `DELETE /api/orders/<id>` and swap `InMemoryStorage` for a
-  SQLite-backed store. Because `OrderTracker` depends only on three storage methods rather
-  than on a dict, that swap should need no changes to the business logic — and the unit
-  tests, which mock storage anyway, would keep passing unchanged.
+- **Next step.** Add `DELETE /api/orders/<id>` and swap `InMemoryStorage` for SQLite. Since
+  `OrderTracker` depends on three storage methods rather than a dict, the unit tests should keep
+  passing untouched.
 
 ## Project structure
 
